@@ -5,11 +5,15 @@ import sys
 import bisect
 import os
 import json
+import h5py as h5
 import datetime
 from array import array
 
+# fname = '/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt'
+# out_fname = '/media/data/ims/Ctrl3s2.h5'
+
 if len(sys.argv) < 3:
-    print "Usage: python convert_txt_to_bin.py input.txt output.bin"
+    print("Usage: python convert_txt_to_bin.py input.txt output.h5")
     exit(0)
 
 def txt_to_spectrum(s):
@@ -54,11 +58,16 @@ def my_print(s):
     print("[" + str(datetime.datetime.now()) + "] " + s, file=sys.stderr)
 
 
-my_print("Reading %s..." % sys.argv[1])
-(sp_meta, sp_data) = txtfile_to_array(sys.argv[1], 'f')
-my_print("Writing to %s..." % sys.argv[2])
-save_array(sys.argv[2], sp_meta, sp_data)
+my_print("Reading %s and writing to %s..." % ( sys.argv[1], sys.argv[2]) )
+f = h5.File(sys.argv[2], 'w')
+f.create_group('sp')
+with open(sys.argv[1]) as infile:
+    for line in infile:
+        s = txt_to_spectrum(line)
+        g = f.create_group(s[0])
+        g.create_dataset('mz', dtype='f', data=s[1])
+        g.create_dataset('sp', dtype='f', data=s[2])
+f.close()
 my_print("All done!")
 exit(0)
-
 
