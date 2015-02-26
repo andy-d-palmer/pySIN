@@ -34,40 +34,13 @@ def txtquery_to_mzvalues(line):
 conf = SparkConf().setAppName("Extracting m/z images").setMaster("local") #.set("spark.executor.memory", "16g").set("spark.driver.memory", "8g")
 sc = SparkContext(conf=conf)
 
-## this reads a regular text file
-# ff = sc.textFile("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
-## gzipped file
-# ff = sc.textFile("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt.gz")
-## and this is Hadoop HDFS
-# ff = sc.textFile("hdfs://localhost:9000/user/snikolenko/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
-# spectra = ff.map(txt_to_spectrum)
-
-
-# (sp_meta, sp_data) = txtfile_to_array("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt", 'd')
-# save_array("Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.Spark", sp_meta, sp_data)
-
-
-# (sp_meta_float, sp_data_float) = txtfile_to_array("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt", 'f')
-# save_array("Ctrl3s2.float", sp_meta_float, sp_data_float)
-
-# (sp_meta2, sp_data2) = read_array("Ctrl3s2.float")
-
-
-# dirname = "/media/data/ims/Ctrl3s2.float"
-# sp_meta = json.loads( "\n".join(sc.textFile(dirname + os.sep + "meta.json").collect()) )
-
-# sp_data = 
-
-## this is a spark sequence file
-# ff = sc.sequenceFile("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.Spark")
-# spectra = ff.map(seq_to_spectrum)
+queries = sc.textFile("s3n://sin-test-s3bucket/peaklist.csv").map(txtquery_to_mzvalues).collect()
+qBr = sc.broadcast(queries)
 
 ff = sc.textFile("s3n://sin-test-s3bucket/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
 spectra = ff.map(txt_to_spectrum)
 spectra.cache()
 
-queries = sc.textFile("s3n://sin-test-s3bucket/peaklist.csv").map(txtquery_to_mzvalues).collect()
-qBr = sc.broadcast(queries)
 qres = spectra.map(lambda sp : get_many_groups_total_txt(qBr.value, sp)).reduce(lambda x, y: [ x[i] + " " + y[i] for i in xrange(len(x))])
 
 with open("~/spark.res.txt", "w") as f:

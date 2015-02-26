@@ -34,7 +34,7 @@ def txtquery_to_mzvalues(line):
     (mz, tol) = ( float(arr[0]), float(arr[1]) )
     return (mz - tol, mz + tol)
 
-conf = SparkConf().setAppName("Extracting m/z images").setMaster("local") #.set("spark.executor.memory", "16g").set("spark.driver.memory", "8g")
+conf = SparkConf().setAppName("Extracting m/z images").setMaster("local[4]") #.set("spark.executor.memory", "16g").set("spark.driver.memory", "8g")
 sc = SparkContext(conf=conf)
 
 queries = sc.textFile("/media/data/ims/peak_list.csv").map(txtquery_to_mzvalues).collect()
@@ -53,19 +53,22 @@ h5fname = '/media/data/ims/Ctrl3s2.h5'
 def readchunk(v):
     h5f = h5.File(h5fname)
     key = h5f.keys()[v]
-    return (key, h5f[key]['mz'][:], h5f[key]['sp'][:] )
+    res = (key, h5f[key]['mz'][:], h5f[key]['sp'][:] )
+    h5f.close()
+    return res
 
 def get_num_groups(h5fname):
     h5f = h5.File(h5fname)
-    return len(h5f.keys())
+    res = len(h5f.keys())
+    h5f.close()
+    return res
 
 num_keys = get_num_groups(h5fname)
 
 spectra = sc.parallelize(range(0,num_keys)).map(lambda v: readchunk(v))
-# spectra.cache()
 qres = spectra.map(lambda sp : get_many_groups_total_txt(qBr.value, sp)).reduce(lambda x, y: [ x[i] + " " + y[i] for i in xrange(len(x))])
 
-with open("/media/data/ims/spark.res.txt", "w") as f:
+with open("/media/data/ims/spark.res2.txt", "w") as f:
     for q in qres:
         f.write(q + "\n")
 
