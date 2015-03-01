@@ -50,7 +50,7 @@ def clean_image(im):
     im[im>im_q] = im_q
     # interpolate to replace missing data - not always present
     X,Y=np.meshgrid(np.arange(0,im_size[1]),np.arange(0,im_size[0]))
-    f=interpolate.interp2d(X[notnull],Y[notnull],im[notnull])
+    f=interpolate.interp2d(X[notnull],Y[notnull],im[notnull], kind='linear', copy=False)
     im=f(np.arange(0,im_size[1]),np.arange(0,im_size[0]))
     return im
 
