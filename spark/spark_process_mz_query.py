@@ -31,15 +31,15 @@ def txtquery_to_mzvalues(line):
     (mz, tol) = ( float(arr[0]), float(arr[1]) )
     return (mz - tol, mz + tol)
 
-conf = SparkConf().setAppName("Extracting m/z images").setMaster("local") #.set("spark.executor.memory", "16g").set("spark.driver.memory", "8g")
+conf = SparkConf() #.setAppName("Extracting m/z images").setMaster("local") #.set("spark.executor.memory", "16g").set("spark.driver.memory", "8g")
 sc = SparkContext(conf=conf)
 
 ## this reads a regular text file
-# ff = sc.textFile("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
+ff = sc.textFile("/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
 ## gzipped file
 # ff = sc.textFile("/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt.gz")
 ## and this is Hadoop HDFS
-ff = sc.textFile("hdfs://localhost:9000/user/snikolenko/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
+# ff = sc.textFile("hdfs://localhost:9000/user/snikolenko/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt")
 spectra = ff.map(txt_to_spectrum)
 
 def txtfile_to_array(fname, itemtype='d'):
@@ -98,11 +98,14 @@ def read_array(dirname):
 
 spectra.cache()
 
-queries = sc.textFile("/media/data/ims/peak_list.csv").map(txtquery_to_mzvalues).collect()
+# queries = sc.textFile("/media/data/ims/peak_list.csv").map(txtquery_to_mzvalues).collect()
+queries = sc.textFile("/peaklist.csv").map(txtquery_to_mzvalues).collect()
 qBr = sc.broadcast(queries)
 qres = spectra.map(lambda sp : get_many_groups_total_txt(qBr.value, sp)).reduce(lambda x, y: [ x[i] + " " + y[i] for i in xrange(len(x))])
 
-with open("/media/data/ims/spark.res.txt", "w") as f:
+# qres.saveAsTextFile("/result.csv")
+
+with open("/root/spark.res.txt", "w") as f:
     for q in qres:
         f.write(q + "\n")
 
