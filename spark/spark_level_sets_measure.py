@@ -48,10 +48,12 @@ def clean_image(im):
     # hot spot removal (quantile threshold)
     im_q = np.percentile(im[notnull],99)
     im[im>im_q] = im_q
-    # interpolate to replace missing data - not always present
-    X,Y=np.meshgrid(np.arange(0,im_size[1]),np.arange(0,im_size[0]))
-    f=interpolate.interp2d(X[notnull],Y[notnull],im[notnull], kind='linear', copy=False)
-    im=f(np.arange(0,im_size[1]),np.arange(0,im_size[0]))
+
+    # # interpolate to replace missing data - not always present
+    # X,Y=np.meshgrid(np.arange(0,im_size[1]),np.arange(0,im_size[0]))
+    # f=interpolate.interp2d(X[notnull],Y[notnull],im[notnull], kind='linear', copy=False)
+    # im=f(np.arange(0,im_size[1]),np.arange(0,im_size[0]))
+
     return im
 
 
@@ -120,7 +122,7 @@ def create_image(qres, i):
 images = sc.parallelize( [ create_image(qres,i) for i in xrange(len(queries)) ] )
 chaos_measures = images.map( lambda img : measure_of_chaos(img, num_levels) ).collect()
 
-with open(datadir + '/res.chaosmeasures.txt', "w") as outfile:
+with open(datadir + '/res.chaosmeasures.noint.txt', "w") as outfile:
     for res in chaos_measures:
         outfile.write("%.6f\n" % res)
 

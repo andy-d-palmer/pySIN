@@ -1,0 +1,95 @@
+{% extends "main.html" %}
+
+{% block add_includes %}
+    <link rel="stylesheet" href="{{ static_url("js/fancybox/source/jquery.fancybox.css") }}" type="text/css" media="screen" />
+    <script type="text/javascript" src="{{ static_url("js/fancybox/source/jquery.fancybox.pack.js") }}" ></script>
+{% end %}
+
+
+{% block init_script %}
+    <script type="text/javascript" class="init">
+      $(document).ready(function() {
+        $("#nav-jobs").addClass("active");
+        $("#nav-jobs a").attr("href", "#");
+        $("#nav-jobs a").html( $("#nav-jobs a").html() + ' <span class="sr-only">(current)</span>' );
+
+        var tbl_jobs = $('#tbl-jobs').dataTable( {
+          ajax: "/ajax/jobs/",
+          processing: true,
+          serverSide: true,
+          order: [[ 0, "asc" ]],
+          aLengthMenu: [100, 200, 500],
+          // oLanguage: myTableLanguagePlayers,
+          "columnDefs": [
+            { "render": function ( data, type, row ) { return sin_render_dataset(row[0], data); }, "targets": [1] },
+            { "render": function ( data, type, row ) { return sin_render_job(row[2], data); }, "targets": [3] },
+            { "render": function ( data, type, row ) { return sin_render_substance(row[4], data); }, "targets": [5] },
+            { "render": function ( data, type, row ) { return sin_render_tasks(row[8], data); }, "targets": [9] },
+            { "render": function ( data, type, row ) { return sin_render_time(data); }, "targets": [10] },
+            { "render": function ( data, type, row ) { if (row[6]) { return sin_render_time(data); } else { return ""; } }, "targets": [11] },
+            { "render": function ( data, type, row ) { if (!row[6]) { return ""; } else {
+              return sin_render_jobresult(data); } }, "targets": [12] },
+            { "visible": false,  "targets": [ 2, 4, 6, 8 ] },
+          ],
+          "fnDrawCallback": function( oSettings ) {
+            $(".fancybox-ajax").fancybox({type : "image"});
+          }
+        } );
+
+        setInterval( function () {
+            tbl_jobs.ajax.reload();
+        }, 20000 );
+
+      } );
+    </script>
+{% end %}
+
+{% block body %}
+    <div class="panel panel-primary">
+      <div class="panel-heading">Test server on Spark</div>
+      <div class="panel-body">
+        <p>This test web server for IMS data processing is built with Tornado and is (trying to) communicate with Spark.</p>
+      </div>
+    </div>
+    <div class="panel panel-primary">
+      <div class="panel-heading">Formulas</div>
+      <table id="tbl-jobs" class="table table-striped" cellspacing="0" width="100%">
+        <thead>
+          <tr>
+            <th>Job id</th>
+            <th>Job</th>
+            <th>Dataset id</th>
+            <th>Dataset</th>
+            <th>Substance id</th>
+            <th>Substance</th>
+            <th>Done</th>
+            <th>Status</th>
+            <th>Tasks done</th>
+            <th>Tasks</th>
+            <th>Started at</th>
+            <th>Finished at</th>
+            <th></th>
+          </tr>
+        </thead>
+   
+        <tfoot>
+          <tr>
+            <th>Job id</th>
+            <th>Job</th>
+            <th>Dataset id</th>
+            <th>Dataset</th>
+            <th>Substance id</th>
+            <th>Substance</th>
+            <th>Done</th>
+            <th>Status</th>
+            <th>Tasks done</th>
+            <th>Tasks</th>
+            <th>Started at</th>
+            <th>Finished at</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+{% end %}
