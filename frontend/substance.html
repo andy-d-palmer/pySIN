@@ -27,9 +27,9 @@
 
           for (var i=0; i < data["isodist_mzs"].length; i++) {
             var cur = { "mz" : data["isodist_mzs"][i].toFixed(3),
-                        "int" : data["isodist_int"][i].toFixed(3),
-                        "alpha" : "0.4",
-                        "lineColor" : linecolors[2] };
+                        "int" : data["isodist_int"][i].toFixed(3) };
+                        // "alpha" : "0.4" } ;
+                        // "lineColor" : linecolors[2] };
             mz_array.push(cur);
             mz_array_forspark.push(cur["mz"]);
           }
@@ -40,8 +40,8 @@
           for (var i=0; i < data["grad_ind"].length; i++) {
             var cur = [ data["grad_mzs"][i], data["grad_int"][i] ];
             mz_peak_array.push(cur);
-            mz_array[data["grad_ind"][i]]["lineColor"] = linecolors[0];
-            mz_array[data["grad_ind"][i]]["alpha"] = 0.9;
+            // mz_array[data["grad_ind"][i]]["lineColor"] = linecolors[0];
+            // mz_array[data["grad_ind"][i]]["alpha"] = 0.8;
           }
           $('#table-mzs').dataTable( {
             "data": mz_peak_array,
@@ -69,18 +69,20 @@
             "graphs": [
               {
                 "id"              : "int",
-                "type"            : "column",
+                // "type"            : "column",
+                // "type"            : "column",
                 "valueAxis"       : "axisval",
                 // "bullet"          : "round",
                 // "bulletSize"      : 3,
                 "valueField"      : "int",
                 "colorField"      : "lineColor",
                 "lineColorField"  : "lineColor",
-                "fillColorsField" : "lineColor",
-                "fillAlphas"      : 0.3,
-                "lineAlpha"      : 1,
+                // "fillColorsField" : "lineColor",
+                // "fillAlphas"      : 0.4,
+                "lineAlpha"       : 1,
+                "lineColor"       : linecolors[2],
                 "alphaField"      : "alpha",
-                "lineThickness"   : 1
+                "lineThickness"   : 1.5
               }
             ],
             "chartScrollbar" : {
@@ -106,9 +108,11 @@
 
           $('#btn-runmz').click(function() {
             $('#btn-runmz').addClass("disabled");
+            // alert(mz_array_forspark.toString());
             $.post("/run/extractmzs", {
               "data" : mz_array_forspark.toString(),
-              "formula_id" : subst_id
+              "formula_id" : subst_id,
+              "dataset_id" : 0
             });
           });
         });
@@ -121,12 +125,12 @@
           aLengthMenu: [10, 20, 50],
           "columnDefs": [
             { "render": function ( data ) { return data.slice(0, 19).replace('T', ' '); }, "targets": [8] },
-            { "render": function ( data, type, row ) { if (row[2]) { return sin_render_time(data); } else { return ""; } }, "targets": [9] },
+            { "render": function ( data, type, row ) { if (row[4]) { return sin_render_time(data); } else { return ""; } }, "targets": [9] },
             { "render": function ( data, type, row ) { return sin_render_dataset(row[0], data); }, "targets": [1] },
-            { "render": function ( data, type, row ) { return sin_render_job(row[2], data); }, "targets": [3] },
+            { "render": function ( data, type, row ) { return sin_render_job(row[2], row[1], data); }, "targets": [3] },
             { "render": function ( data, type, row ) { return sin_render_tasks(row[6], data); }, "targets": [7] },
             { "render": function ( data, type, row ) { if (row[5] != "SUCCEEDED") { return ""; } else {
-              return sin_render_jobresult(data); }, "targets": [10] },
+              return sin_render_jobresult(data); } }, "targets": [10] },
             { "visible": false,  "targets": [ 0, 2, 4, 6 ] },
           ],
           "fnDrawCallback": function( oSettings ) {
@@ -136,7 +140,6 @@
 
         setInterval( function () {
             tbl_spark.ajax.reload();
-            // tbl_spark.fnDraw();
         }, 5000 );
       } );
 {% end %}

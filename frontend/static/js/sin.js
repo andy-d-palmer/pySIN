@@ -19,7 +19,10 @@ function sin_render_dataset(id, name) {
   // return '<a href="/dataset/' + id +'">' + name + '</a>';
 }
 
-function sin_render_job(id, name) {
+function sin_render_job(id, type, name) {
+  if (type == 1) {
+    return '<a href="/fullresults/' + id +'">' + name + '</a>';
+  }
   return name;
   // return '<a href="/dataset/' + id +'">' + name + '</a>';
 }
@@ -28,12 +31,21 @@ function sin_render_substance(id, name) {
   return '<a href="/substance/' + id +'">' + name + '</a>';
 }
 
+function sin_render_fullresults(id) {
+  return '<a href="/fullresults/' + id +'">' + "Show results" + '</a>';
+}
+
 function sin_render_tasks(done, total) {
-  if (total == done) {
-    return total;
-  } else {
-    return done + "/" + total;
+  var style="warning";
+  if (total == done && total > 0) {
+    style="success";
   }
+  return '<div class="progress" style="text-align:center;font-weight:bold;height:80%;"><div class="progress-bar-' + style + '" role="progressbar" aria-valuenow="' + (done * 100 / total).toString() + '" aria-valuemin="0" aria-valuemax="100" style="width: ' + (done * 100 / total).toString() + '%;">' + done + "/" + total + '</div></div>';
+  // if (total == done) {
+  //   return total;
+  // } else {
+  //   return done + "/" + total;
+  // }
 }
 
 function sin_render_time(data) {
@@ -42,6 +54,10 @@ function sin_render_time(data) {
 
 function sin_render_jobresult(data) {
   return "<a class=\"btn btn-success btn-sm fancybox-ajax\" rel=\"group\" href=\"/mzimage/" + data + ".png\">Show m/z image</a>";
+}
+
+function sin_render_fullextract(data) {
+  return "<a class=\"btn btn-danger btn-sm btn-fullextract\" datasetid=\"" + data + "\" rel=\"group\" data-toggle=\"modal\" data-target=\"#myModal\">Run full extraction</a>";
 }
 
 function sin_format_daterange(dts1, dts2) {
