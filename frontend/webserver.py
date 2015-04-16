@@ -18,36 +18,18 @@ import tornpsql
 import numpy as np
 
 import time
-import threading
-import Queue
 import decimal
-
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import cStringIO
 
 from pyspark import SparkContext, SparkConf
 
 from computing import *
+from util import *
+from spark import *
+
 import imaging
 import imageentropy
 import blockentropy
 
-fulldataset_chunk_size = 1000
-
-def my_print(s):
-    print "[" + str(datetime.now()) + "] " + s
-
-class DateTimeEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        elif isinstance(obj, date):
-            return obj.isoformat()
-        elif isinstance(obj, timedelta):
-            return (datetime.min + obj).time().isoformat()
-        else:
-            return super(DateTimeEncoder, self).default(obj)
 
 sql_counts = dict(
 	formulas="SELECT count(*) FROM formulas",
@@ -62,6 +44,7 @@ sql_queries = dict(
 	formulas="SELECT id,name,sf FROM formulas ",
 	formulas_search="SELECT id,name,sf FROM formulas WHERE lower(name) like '%%%s%%' OR lower(sf) like '%%%s%%' OR id like '%s%%' ",
 	substance="SELECT id,name,sf FROM formulas where id='%s'",
+	jobstats="SELECT stats,peaks FROM job_result_stats s JOIN mz_peaks p ON s.formula_id=p.formula_id WHERE job_id=%s",
 	substancejobs='''
 		SELECT j.dataset_id,dataset,id,description,done,status,tasks_done,tasks_total,start,finish,id
 		FROM jobs j
@@ -84,8 +67,8 @@ sql_queries = dict(
 		WHERE j.id=%s
 	''',
 	fullimages='''
-		SELECT id,name,sf,stats->'entropy' as entropy,id
-		FROM job_result_stats j LEFT JOIN formulas f ON f.id=cast(j.param as text)
+		SELECT id,name,sf,stats->'entropies' as entropies,stats->'total_ent' as total_ent,id
+		FROM job_result_stats j LEFT JOIN formulas f ON f.id=j.formula_id
 		WHERE job_id=%s
 	'''
 )
@@ -95,168 +78,15 @@ sql_fields = dict(
 	substancejobs=["dataset_id", "dataset", "id", "description", "done", "status", "tasks_done", "tasks_total", "start", "finish", "id"],
 	jobs=["id", "type", "description", "dataset_id", "dataset", "formula_id", "formula_name", "done", "status", "tasks_done", "tasks_total", "start", "finish", "id"],
 	datasets=["dataset_id", "dataset", "nrows", "ncols", "dataset_id"],
-	fullimages=["id", "name", "sf", "entropy", "id"]
+	fullimages=["id", "name", "sf", "entropies", "total_ent", "id"]
 )
 
-
-def delayed(seconds):
-	def f(x):
-		time.sleep(seconds)
-		return x
-	return f
-
-@gen.coroutine
-def async_sleep(seconds):
-    yield gen.Task(IOLoop.instance().add_timeout, time.time() + seconds)
-
-def call_in_background(f, *args):
-    result = Queue.Queue(1)
-    t = threading.Thread(target=lambda: result.put(f(*args)))
-    t.start()
-    return result
-
-def get_id_from_slug(slug):
-	return slug if slug[-1] != '/' else slug[:-1]
-
-dataset_name  = "Ctrl3s2"
-# dataset_id  = 0
-dataset_id  = 1
-# dataset_name  = "test"
-# dataset_fname = "/media/data/ims/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt"
-# dataset_fname = "/home/snikolenko/soft/ims/data/Ctrl3s2_SpheroidsCtrl_DHBSub_IMS.txt"
-dataset_fname = "/home/snikolenko/soft/ims/data/testdataset.txt"
-
-def run_extractmzs(sc, fname, data, nrows, ncols):
-	ff = sc.textFile(fname)
-	spectra = ff.map(txt_to_spectrum)
-	qres = spectra.map(lambda sp : get_many_groups_total_dict(data, sp)).reduce(join_dicts)
-	return qres
-
-def dicts_to_dict(dictresults):
-	res_dict = dictresults[0]
-	for res in dictresults[1:]:
-		res_dict.update({ k : v + res_dict.get(k, 0.0) for k,v in res.iteritems() })
-	return res_dict
-
-def run_fulldataset(sc, fname, data, nrows, ncols):
-	ff = sc.textFile(fname)
-	spectra = ff.map(txt_to_spectrum)
-	qres = spectra.map(lambda sp : get_many_groups2d_total_dict(data, sp)).reduce(reduce_manygroups2d_dict)
-	entropies = [ blockentropy.get_block_entropy_dict(x, nrows, ncols) for x in qres ]
-	return (qres, entropies)
-
-
-class RunSparkHandler(tornado.web.RequestHandler):
-	@property
-	def db(self):
-		return self.application.db
-
-	def result_callback(response):
-		my_print("Got response! %s" % response)
-
-	def strings_to_dict(self, stringresults):
-		res_dict = { int(x.split(':')[0]) : float(x.split(':')[1]) for x in stringresults[0].split(' ') }
-		for res_string in stringresults[1:]:
-			res_dict.update({ int(x.split(':')[0]) : float(x.split(':')[1]) + res_dict.get(int(x.split(':')[0]), 0.0) for x in res_string.split(' ') })
-		return res_dict
-
-	def process_res_extractmzs(self, result):
-		res_dict = result.get()
-		my_print("Got result of job %d with %d nonzero spectra" % (self.job_id, len(res_dict)))
-		if (len(res_dict) > 0):
-			self.db.query("INSERT INTO job_result_data VALUES %s" %
-				",".join(['(%d, %d, %d, %.6f)' % (self.job_id, -1, k, v) for k,v in res_dict.iteritems()])
-			)
-
-	def process_res_fulldataset(self, result, offset=0):
-		res_dicts, entropies = result.get()
-		total_nonzero = sum([len(x) for x in res_dicts])
-		my_print("Got result of full dataset job %d with %d nonzero spectra" % (self.job_id, total_nonzero))
-		if (total_nonzero > 0):
-			self.db.query("INSERT INTO job_result_data VALUES %s" %
-				",".join(['(%d, %d, %d, %.6f)' % (self.job_id, int(self.formulas[i+offset]["id"]), k, v) for i in xrange(len(res_dicts)) for k,v in res_dicts[i].iteritems()])
-			)
-			self.db.query("INSERT INTO job_result_stats VALUES %s" %
-				",".join(['(%d, %d, \'{"entropy" : %.6f}\')' % (
-					self.job_id,
-					int(self.formulas[i+offset]["id"]),
-					entropies[i]
-				) for i in xrange(len(res_dicts)) if entropies[i] > 0 ])
-			)
-
-	@gen.coroutine
-	def post(self, query_id):
-		my_print("called /run/" + query_id)
-
-		self.dataset_id = int(self.get_argument("dataset_id"))
-		dataset_params = self.db.query("SELECT filename,nrows,ncols FROM datasets WHERE dataset_id=%d" % self.dataset_id)[0]
-		self.nrows = dataset_params["nrows"]
-		self.ncols = dataset_params["ncols"]
-		self.fname = dataset_params["filename"]
-		self.job_id = -1
-		## we want to extract m/z values
-		if query_id == "extractmzs":
-			self.formula_id = self.get_argument("formula_id")
-			self.job_type = 0
-			tol = 0.01
-			peaks = self.db.query("SELECT peaks FROM mz_peaks WHERE formula_id='%s'" % self.formula_id)[0]["peaks"]
-			# data = [ [float(x)-tol, float(x)+tol] for x in self.get_argument("data").strip().split(',')]
-			data = [ [float(x)-tol, float(x)+tol] for x in peaks]
-			my_print("Running m/z extraction for formula id %s" % self.formula_id)
-
-			cur_jobs = set(self.application.status.getActiveJobsIds())
-			my_print("Current jobs: %s" % cur_jobs)
-			result = call_in_background(run_extractmzs, *(self.application.sc, self.fname, data, self.nrows, self.ncols))
-			self.spark_job_id = -1
-			while self.spark_job_id == -1:
-				yield async_sleep(1)
-				my_print("Current jobs: %s" % set(self.application.status.getActiveJobsIds()))
-				if len(set(self.application.status.getActiveJobsIds()) - cur_jobs) > 0:
-					self.spark_job_id = list(set(self.application.status.getActiveJobsIds()) - cur_jobs)[0]
-			## if this job hasn't started yet, add it
-			if self.job_id == -1:
-				self.job_id = self.application.add_job(self.spark_job_id, self.formula_id, self.dataset_id, self.job_type, datetime.now())
-			else:
-				self.application.jobs[self.job_id]["spark_id"] = self.spark_job_id
-			while result.empty():
-				yield async_sleep(1)
-			self.process_res_extractmzs(result)
-
-		elif query_id == "fulldataset":
-			my_print("Running dataset-wise m/z image extraction for dataset id %s" % self.dataset_id)
-			self.formula_id = -1
-			self.job_type = 1			
-			prefix = "\t[fullrun %s] " % self.dataset_id
-			my_print(prefix + "collecting m/z queries for the run")
-			tol = 0.01
-			self.formulas = self.db.query("SELECT formula_id as id,peaks FROM mz_peaks")
-			mzpeaks = [ x["peaks"] for x in self.formulas]
-			data = [ [ [float(x)-tol, float(x)+tol] for x in peaks ] for peaks in mzpeaks ]
-			my_print(prefix + "looking for %d peaks" % sum([len(x) for x in data]))
-			self.num_chunks = len(data) / fulldataset_chunk_size
-			self.job_id = self.application.add_job(-1, self.formula_id, self.dataset_id, self.job_type, datetime.now(), chunks=self.num_chunks)
-			for i in xrange(self.num_chunks):
-				my_print("Processing chunk %d..." % i)
-				cur_jobs = set(self.application.status.getActiveJobsIds())
-				my_print("Current jobs: %s" % cur_jobs)
-				result = call_in_background(run_fulldataset, *(self.application.sc, self.fname, data[fulldataset_chunk_size*i:fulldataset_chunk_size*(i+1)], self.nrows, self.ncols))
-				self.spark_job_id = -1
-				while self.spark_job_id == -1:
-					yield async_sleep(1)
-					my_print("Current jobs: %s" % set(self.application.status.getActiveJobsIds()))
-					if len(set(self.application.status.getActiveJobsIds()) - cur_jobs) > 0:
-						self.spark_job_id = list(set(self.application.status.getActiveJobsIds()) - cur_jobs)[0]
-				## if this job hasn't started yet, add it
-				if self.job_id == -1:
-					self.job_id = self.application.add_job(self.spark_job_id, self.formula_id, self.dataset_id, self.job_type, datetime.now())
-				else:
-					self.application.jobs[self.job_id]["spark_id"] = self.spark_job_id
-				while result.empty():
-					yield async_sleep(1)
-				self.process_res_fulldataset(result, offset=fulldataset_chunk_size*i)
-		else:
-			my_print("[ERROR] Incorrect run query %s!" % query_id)
-			return
+def get_formula_and_peak(s):
+	arr = get_id_from_slug(s).split('p')
+	if len(arr) > 1:
+		return (int(arr[0]), int(arr[1]))
+	else:
+		return (int(arr[0]), -1)
 
 class MZImageHandler(tornado.web.RequestHandler):
 	@property
@@ -266,11 +96,14 @@ class MZImageHandler(tornado.web.RequestHandler):
 	@gen.coroutine
 	def get(self, job_string):
 		my_print(job_string)
-		job_id = int(get_id_from_slug(job_string))
+		job_id, peak_id = get_formula_and_peak(job_string)
 		my_print("Creating m/z image for job %d..." % job_id)
-		params = self.db.query("SELECT nrows,ncols FROM jobs j JOIN datasets d on j.dataset_id=d.dataset_id WHERE j.id=%d" % (int(job_id)))[0]
+		params = self.db.query("SELECT nrows,ncols FROM jobs j JOIN datasets d on j.dataset_id=d.dataset_id WHERE j.id=%d" % (job_id))[0]
 		(dRows, dColumns) = ( int(params["nrows"]), int(params["ncols"]) )
-		data = self.db.query("SELECT spectrum as s,value as v FROM job_result_data WHERE job_id=%d" % (int(job_id)))
+		if peak_id > -1:
+			data = self.db.query("SELECT spectrum as s,value as v FROM job_result_data WHERE job_id=%d AND peak=%d" % (job_id, peak_id))
+		else:
+			data = self.db.query("SELECT spectrum as s,value as v FROM job_result_data WHERE job_id=%d" % job_id)
 		sio = imaging.write_image( imaging.make_image_arrays(dRows, dColumns, [int(row["s"]) for row in data], [float(row["v"]) for row in data]) )
 		self.set_header("Content-Type", "image/png")
 		self.write(sio.getvalue())
@@ -284,11 +117,12 @@ class MZImageParamHandler(tornado.web.RequestHandler):
 	@gen.coroutine
 	def get(self, job_string, param_string):
 		my_print(job_string)
-		job_id, param_id = int(get_id_from_slug(job_string)), int(get_id_from_slug(param_string))
+		job_id = int( get_id_from_slug(job_string) )
+		formula_id, peak_id = get_formula_and_peak(param_string)
 		my_print("Creating m/z image for job %d..." % job_id)
-		params = self.db.query("SELECT nrows,ncols FROM jobs j JOIN datasets d on j.dataset_id=d.dataset_id WHERE j.id=%d" % (int(job_id)))[0]
+		params = self.db.query("SELECT nrows,ncols FROM jobs j JOIN datasets d on j.dataset_id=d.dataset_id WHERE j.id=%d" % job_id)[0]
 		(dRows, dColumns) = ( int(params["nrows"]), int(params["ncols"]) )
-		data = self.db.query("SELECT spectrum as s,value as v FROM job_result_data WHERE job_id=%d AND param=%d" % (int(job_id), int(param_id)))
+		data = self.db.query("SELECT spectrum as s,value as v FROM job_result_data WHERE job_id=%d AND param=%d AND peak=%d" % (job_id, formula_id, peak_id))
 		sio = imaging.write_image( imaging.make_image_arrays(dRows, dColumns, [int(row["s"]) for row in data], [float(row["v"]) for row in data]) )
 		self.set_header("Content-Type", "image/png")
 		self.write(sio.getvalue())
@@ -337,15 +171,22 @@ class AjaxHandler(tornado.web.RequestHandler):
 			res = self.db.query(q_res + " ORDER BY %s %s LIMIT %s OFFSET %s" % (orderby, orderdir, limit, offset))
 			res_dict = self.make_datatable_dict(draw, count, [[ row[x] for x in sql_fields[query_id] ] for row in res])
 		else:
-			my_print(sql_queries[query_id] % input_id)
-			res_list = self.db.query(sql_queries[query_id] % input_id)
-			if query_id not in ['fullimages']:
-				res_dict = res_list[0]
+			if query_id == 'jobstats':
+				arr = input_id.split('/')
+				if len(arr) > 1:
+					final_query = sql_queries[query_id] % arr[0] + " AND s.formula_id='%s'" % arr[1]
+				else: 
+					final_query = sql_queries[query_id] % input_id
 			else:
+				final_query = sql_queries[query_id] % input_id
+			my_print(final_query)
+			res_list = self.db.query(final_query)
+			if query_id in ['fullimages']:
 				res_dict = {"data" : [ [x[field] for field in sql_fields[query_id]] for x in res_list]}
+			else:
+				res_dict = res_list[0]
 			## add isotopes for the substance query
 			if query_id == "substance":
-				# my_print("mz lists: %s" % get_lists_of_mzs(res_dict["sf"]))
 				res_dict.update(get_lists_of_mzs(res_dict["sf"]))
 			res_dict.update({"draw" : draw})
 
@@ -482,33 +323,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-# config_db = dict(
-#                     host="/var/run/postgresql/",
-#                     db="ims",
-#                     user="snikolenko",
-#                     password=""
-#                 )
-# conn = psycopg2.connect("host='%s' dbname='%s' user='%s' password='%s'" % (
-#     config_db["host"], config_db["db"], config_db["user"], config_db["password"]
-#     ))
-# cur = conn.cursor()
-# cur.execute("SELECT id,sf FROM formulas")
-# rows = cur.fetchall()
-
-# mzpeaks = {}
-# for x in rows:
-# 	mzpeaks[x[0]] = get_lists_of_mzs(x[1])["grad_mzs"]
-
-# with open("mzpeaks.csv", "w") as outfile:
-# 	outfile.write("\n".join(["%s;{%s}" % (k, ",".join(["%.4f" % x for x in mzpeaks[k]]) ) for k in mzpeaks if len(mzpeaks[k]) > 0 ]))
-
-
-
-# cur.execute("INSERT INTO job_result_data VALUES %s" %
-# 				",".join(['(%d, %d, %d, %.6f)' % (self.job_id, -1, k, v) for k,v in res_dict.iteritems()])
-# 			)
-
 

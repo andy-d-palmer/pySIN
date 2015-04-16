@@ -5,15 +5,16 @@ import cStringIO
 
 
 def write_image(img, format="png"):
+	'''Save image in a given format and return the StringIO object'''
 	fig = plt.figure()
 	fig_ax1=fig.add_subplot(111)
 	fig_ax1.imshow(img)
 	sio = cStringIO.StringIO()
-	plt.savefig(sio, format=format)
+	plt.savefig(sio, format=format, bbox_inches='tight')
 	return sio
 
-
 def make_image_dict(nRows, nColumns, valdict, offset=0):
+	'''Create image from a dictionary of its nonzero pixels'''
 	iSize = nRows*nColumns
 	img = np.zeros((iSize,1))
 	for k,v in valdict.iteritems():
@@ -25,6 +26,7 @@ def make_image_dict(nRows, nColumns, valdict, offset=0):
 	return img
 
 def make_image_arrays(nRows, nColumns, indices, values, offset=0):
+	'''Create image from two arrays of its nonzero pixels (array of indices and array of values)'''
 	iSize = nRows*nColumns
 	img = np.zeros((iSize,1))
 	for n in xrange(len(indices)):

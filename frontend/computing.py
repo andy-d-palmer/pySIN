@@ -55,8 +55,18 @@ def get_many_groups_total_dict(queries, sp):
 		res = join_dicts(res, get_one_group_total_dict(sp[0], q[0], q[1], sp[1], sp[2]))
 	return res
 
+def get_many_groups_total_dict_individual(queries, sp):
+	res = [ get_one_group_total_dict(sp[0], q[0], q[1], sp[1], sp[2]) for q in queries ]
+	return res
+
+def get_many_groups2d_total_dict_individual(data, sp):
+	return [ get_many_groups_total_dict_individual(queries, sp) for queries in data]
+
 def reduce_manygroups_dict(x, y):
 	return [ join_dicts(x[i], y[i]) for i in xrange(len(x))]
+
+def reduce_manygroups2d_dict_individual(xarray, yarray):
+	return [ [ join_dicts(xarray[j][i], yarray[j][i]) for i in xrange(len(xarray[j])) ] for j in xrange(len(xarray)) ]
 
 def get_many_groups2d_total_dict(data, sp):
 	# return [ [get_one_group_total_dict(sp[0], q[0], q[1], sp[1], sp[2]) for q in queries] for queries in data]
@@ -74,12 +84,8 @@ def get_lists_of_mzs(sf):
 		indices_list = [i if intenslist[i] > intenslist[i+1] else i+1 for i in indices_list]
 		mzs_list = [mzlist[i] for i in indices_list]
 		intensities_list = [intenslist[i] for i in indices_list]
-		# print "%s" % intenslist
 		min_i = np.min([ i for i in xrange(len(intenslist)) if intenslist[i] > 0.01])
 		max_i = np.max([ i for i in xrange(len(intenslist)) if intenslist[i] > 0.01])
-		# print min_i, max_i
-		# print (np.argmax(intenslist))
-		# print list(indices_list - min_i)
 		return {
 			"isodist_mzs" : mzlist[min_i:max_i],
 			"isodist_int" : intenslist[min_i:max_i],

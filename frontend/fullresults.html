@@ -21,21 +21,22 @@
           var tbl_data = data["data"];
           var tbl_spark = $('#table-images').DataTable( {
             data: tbl_data,
-            order: [[ 3, "asc" ]],
+            order: [[ 4, "asc" ]],
             aLengthMenu: [100, 200, 500],
             "columnDefs": [
-              // { "render": function ( data ) { return data.slice(0, 19).replace('T', ' '); }, "targets": [8] },
-              // { "render": function ( data, type, row ) { if (row[4]) { return sin_render_time(data); } else { return ""; } }, "targets": [9] },
-              // { "render": function ( data, type, row ) { return sin_render_dataset(row[0], data); }, "targets": [1] },
-              { "render": function ( data, type, row ) { return data.toFixed(4); }, "targets": [3] },
+              { "render": function ( data ) { return data.toFixed(3); }, "targets": [4] },
+              { "render": function ( data, type, row ) { 
+                return '<a class="btn btn-xs btn-link" data-toggle="collapse" href="#tr' + row[0] + '" aria-controls="tr' + row[0] + '">Show/hide</a><div class="collapse" id="tr' + row[0] + '">' + data.map(function(x) { return x.toFixed(3); }).join("<br/>") + '</div>';
+              }, "targets": [3] },
               { "render": function ( data, type, row ) { return sin_render_substance(row[0], data); }, "targets": [1, 2] },
               { "render": function ( data, type, row ) { 
                 return sin_render_jobresult(job_id + "/" + row[0]);
-              }, "targets": [4] },
+              }, "targets": [5] },
               // { "visible": false,  "targets": [ 0, 2, 4, 6 ] },
             ],
             "fnDrawCallback": function( oSettings ) {
               $(".fancybox-ajax").fancybox({type : "image"});
+              $(".btn-mz").click(show_images_callback);
             }
           } );
         } );
@@ -64,7 +65,8 @@
             <th>Substance id</th>
             <th>Substance</th>
             <th>Formula</th>
-            <th>Image entropy</th>
+            <th>Image entropies</th>
+            <th>Total entropy</th>
             <th></th>
           </tr>
         </thead>
@@ -74,11 +76,12 @@
             <th>Substance id</th>
             <th>Substance</th>
             <th>Formula</th>
-            <th>Image entropy</th>
+            <th>Image entropies</th>
+            <th>Total entropy</th>
             <th></th>
           </tr>
         </tfoot>
       </table>
     </div>
-
 {% end %}
+

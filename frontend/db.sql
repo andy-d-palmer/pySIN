@@ -49,6 +49,7 @@ DROP TABLE IF EXISTS job_result_data;
 CREATE TABLE job_result_data (
 	job_id			int,
 	param			int,
+	peak			int,
 	spectrum		int,
 	value real
 );
@@ -58,6 +59,7 @@ CREATE INDEX ind_job_result_data_2 ON job_result_data (job_id, param);
 DROP TABLE IF EXISTS job_result_stats;
 CREATE TABLE job_result_stats (
 	job_id			int,
+	formula_id		text,
 	param			int,
 	stats 			json
 );

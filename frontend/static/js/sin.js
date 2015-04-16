@@ -53,7 +53,37 @@ function sin_render_time(data) {
 }
 
 function sin_render_jobresult(data) {
-  return "<a class=\"btn btn-success btn-sm fancybox-ajax\" rel=\"group\" href=\"/mzimage/" + data + ".png\">Show m/z image</a>";
+  // return "<a class=\"btn btn-success btn-sm fancybox-ajax\" rel=\"group\" href=\"/mzimage/" + data + ".png\">Show m/z image</a>" +
+  return '<button type="button" class="btn btn-success btn-sm btn-mz" data-toggle="modal" data-target="#mzmodal" id="' + data + '">Show m/z images</button>';
+}
+
+function show_images_callback() {
+  var id = $(this).attr("id");
+  $.getJSON("/ajax/jobstats/" + id + "/", function (data) {
+    var mzbody = '<div class="container-fluid" style="padding-right: 50px;"><div class="row">';
+    var ent = data["stats"]["entropies"];
+    var peaks = data["peaks"];
+    var npeaks = peaks.length;
+    var img_wid = 1000 / npeaks;
+    var div_col = Math.round(12 / npeaks);
+    if (div_col == 0) {
+      div_col = 1;
+    }
+    for (var i=0; i<npeaks; i+=1) {
+      mzbody += '<div class="col-md-' + div_col.toString() + ' mzimg-cell">m/z = ' + peaks[i].toFixed(2) + '</div>';
+    }
+    mzbody += '</div><div class="row">';
+    for (var i=0; i<npeaks; i+=1) {
+      mzbody += '<div class="col-md-' + div_col.toString() + '"><img width="' + img_wid.toString() +
+          '" src="/mzimage/' + id + 'p' + i + '.png"/></div>';
+    }
+    mzbody += '</div><div class="row">';
+    for (var i=0; i<npeaks; i+=1) {
+      mzbody += '<div class="col-md-' + div_col.toString() + ' mzimg-cell">Entropy = ' + ent[i].toFixed(3) + '</div>';
+    }
+    mzbody += '</div></div>';
+    $("#mz-body").html(mzbody);
+  });
 }
 
 function sin_render_fullextract(data) {
