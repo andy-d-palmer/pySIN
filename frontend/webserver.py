@@ -67,7 +67,7 @@ sql_queries = dict(
 		WHERE j.id=%s
 	''',
 	fullimages='''
-		SELECT id,name,sf,stats->'entropies' as entropies,stats->'total_ent' as total_ent,id
+		SELECT id,name,sf,stats->'entropies' as entropies,stats->'mean_ent' as mean_ent,id
 		FROM job_result_stats j LEFT JOIN formulas f ON f.id=j.formula_id
 		WHERE job_id=%s
 	'''
@@ -78,7 +78,7 @@ sql_fields = dict(
 	substancejobs=["dataset_id", "dataset", "id", "description", "done", "status", "tasks_done", "tasks_total", "start", "finish", "id"],
 	jobs=["id", "type", "description", "dataset_id", "dataset", "formula_id", "formula_name", "done", "status", "tasks_done", "tasks_total", "start", "finish", "id"],
 	datasets=["dataset_id", "dataset", "nrows", "ncols", "dataset_id"],
-	fullimages=["id", "name", "sf", "entropies", "total_ent", "id"]
+	fullimages=["id", "name", "sf", "entropies", "mean_ent", "id"]
 )
 
 def get_formula_and_peak(s):
@@ -271,8 +271,9 @@ class Application(tornado.web.Application):
 	def update_all_jobs_callback(self):
 		try:
 			my_print("updating spark jobs status...")
-			for job_id in self.jobs:
-				self.update_job_status(job_id)
+			for job_id, v in self.jobs.iteritems():
+				if v["finished"] == v["started"]:
+					self.update_job_status(job_id)
 		finally:
 			tornado.ioloop.IOLoop.instance().add_timeout(timedelta(seconds=5), self.update_all_jobs_callback)
 

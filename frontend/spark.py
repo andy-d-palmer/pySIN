@@ -1,5 +1,7 @@
 from datetime import datetime,time,date,timedelta
 
+import numpy as np
+
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
@@ -55,7 +57,7 @@ class RunSparkHandler(tornado.web.RequestHandler):
 	def insert_job_result_stats(self, formula_ids, num_peaks, stats):
 		if len(formula_ids) > 0:
 			for stdict in stats:
-				stdict.update({ 'total_ent' : sum(stdict["entropies"]) })
+				stdict.update({ 'mean_ent' : np.mean(stdict["entropies"]) })
 			self.db.query('INSERT INTO job_result_stats VALUES %s' % (
 				",".join([ '(%d, %s, %d, \'%s\')' % (self.job_id, formula_ids[i], num_peaks[i], json.dumps(
 					stats[i]
